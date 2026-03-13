@@ -1,20 +1,34 @@
-# Use official OpenJDK 17 image
-FROM openjdk:17-jdk
+# -----------------------------
+# Stage 1: Build the project
+# -----------------------------
+FROM maven:3.9.2-eclipse-temurin-17 AS build
 
 # Set working directory
 WORKDIR /app
 
-# Copy all files to /app
+# Copy pom.xml and download dependencies first (for caching)
+COPY pom.xml .
+RUN mvn dependency:go-offline
+
+# Copy all project files
 COPY . .
 
-# Make Maven wrapper executable
-RUN chmod +x mvnw
-
 # Build the project (skip tests for faster build)
-RUN ./mvnw clean package -DskipTests
+RUN mvn clean package -DskipTests
 
-# Expose port 8080 (Render will map it to $PORT)
+# -----------------------------
+# Stage 2: Create lightweight runtime image
+# -----------------------------
+FROM eclipse-temurin:17-jdk-jammy
+
+# Set working directory
+WORKDIR /app
+
+# Copy the JAR from the build stage
+COPY --from=build /app/target/User_Managment_System-0.0.1-SNAPSHOT.jar app.jar
+
+# Expose the default Spring Boot port
 EXPOSE 8080
 
-# Run the Spring Boot jar (replace with your actual jar name in target/)
-CMD ["java", "-jar", "target/UserManagmentSystem-0.0.1-SNAPSHOT.jar"]
+# Run the Spring Boot application
+ENTRYPOINT ["java","-jar","app.jar"]
